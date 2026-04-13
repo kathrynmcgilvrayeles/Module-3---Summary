@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module Summary Jigsaw</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-navy': '#1f2a52',
+                        'brand-cyan': '#00bec7',
+                        'brand-light': '#d2f0f0',
+                        'brand-gray': '#8fa1a6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        popIn: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                        fadeIn: 'fadeIn 0.5s ease-out forwards',
+                        shake: 'shake 0.4s ease-in-out'
+                    },
+                    keyframes: {
+                        popIn: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        shake: {
+                            '0%, 100%': { transform: 'translateX(0)' },
+                            '20%, 60%': { transform: 'translateX(-4px)' },
+                            '40%, 80%': { transform: 'translateX(4px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --brand-navy: #1f2a52;
+            --brand-cyan: #00bec7;
+            --brand-light: #d2f0f0;
+            --brand-gray: #8fa1a6;
+            --brand-med: #aed9d9;
+        }
+
+        body {
+            background-color: #f8fafc;
+            overflow: hidden; /* Prevents page scrolling */
+            touch-action: none; 
+        }
+
+        .draggable {
+            touch-action: none; 
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: grab;
+            transition: transform 0.2s ease, filter 0.2s ease;
+            position: relative;
+            width: 200px; 
+            height: 200px;
+            filter: drop-shadow(0 4px 6px rgba(31, 42, 82, 0.15));
+        }
+
+        .draggable:active {
+            cursor: grabbing;
+        }
+
+        .draggable:hover {
+            transform: scale(1.05);
+            z-index: 50;
+            filter: drop-shadow(0 8px 12px rgba(31, 42, 82, 0.25));
+        }
+
+        /* The Board Slots */
+        .board-slot {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            transition: all 0.3s ease;
+        }
+
+        /* Internal text positioning */
+        .piece-text-container {
+            position: absolute;
+            inset: 30px; /* Aligns exactly with the 140x140 core of the puzzle piece */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            pointer-events: none;
+            color: var(--brand-navy);
+        }
+
+        .short-text {
+            font-size: 0.8rem;
+            font-weight: 800;
+            line-height: 1.2;
+            transition: opacity 0.3s ease;
+        }
+
+        .full-text {
+            display: none;
+            width: 100%;
+        }
+
+        .locked .short-text {
+            display: none;
+        }
+
+        .locked .full-text {
+            display: block;
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        /* Styling when locked into the canvas */
+        .locked svg path {
+            fill: #ffffff;
+            stroke: var(--brand-navy);
+            stroke-width: 6;
+            stroke-linejoin: round;
+        }
+        
+        /* Subtle glow when entire puzzle is complete */
+        .puzzle-complete .locked svg path {
+            fill: #f4f8fb;
+            transition: fill 1s ease;
+        }
+
+        /* Custom Scrollbar for Pool */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen text-brand-navy p-4 md:p-6 flex flex-col items-center">
+
+    <!-- Main Container ensuring no scroll -->
+    <div class="max-w-7xl w-full h-full flex flex-col">
+        
+        <!-- Header -->
+        <header class="shrink-0 mb-6 bg-white p-5 rounded-xl shadow-sm border-t-4 border-brand-navy flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-black mb-1 text-brand-navy tracking-tight">Module Summary</h1>
+                <p class="text-gray-600 font-medium text-sm md:text-base">
+                    Piece together everything we have learned about using Interactive Learning Objects.
+                </p>
+            </div>
+            <div class="bg-brand-navy text-white px-5 py-3 rounded-lg font-semibold shadow-md inline-flex items-center self-start md:self-auto text-sm md:text-base">
+                Drag the pieces onto the canvas. They will snap in when they are dragged into the correct position.
+            </div>
+        </header>
+
+        <!-- Interactive Area -->
+        <div class="flex-1 flex flex-col lg:flex-row gap-6 items-stretch justify-center min-h-0">
+            
+            <!-- Left: The Jigsaw Canvas -->
+            <div class="shrink-0 bg-white p-6 rounded-2xl shadow-md border border-gray-200 flex flex-col items-center justify-center w-full lg:w-auto h-full">
+                
+                <div id="canvas-board" class="relative w-[480px] h-[340px] bg-brand-light/30 border-4 border-dashed border-brand-cyan/40 rounded-xl shadow-inner shrink-0 transition-colors duration-500 mx-auto">
+                    <!-- Slots will be injected here via JS -->
+                    
+                    <!-- Inner Success Overlay -->
+                    <div id="success-overlay" class="absolute inset-0 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-500 rounded-xl bg-white/60 backdrop-blur-[2px]">
+                        <div id="success-card" class="bg-white border-4 border-brand-navy p-6 rounded-2xl shadow-2xl w-4/5 max-w-[320px] text-center transform scale-75 transition-transform duration-500 pointer-events-auto">
+                            <h2 class="text-2xl font-black text-brand-navy mb-2 uppercase tracking-tight">Congratulations!</h2>
+                            <p class="text-gray-600 mb-6 font-medium text-sm">You have successfully completed the module.</p>
+                            <button onclick="location.reload()" class="bg-brand-navy hover:bg-brand-cyan text-white font-bold py-3 px-6 rounded-full transition duration-300 w-full text-sm uppercase tracking-wider shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform">
+                                Restart Activity
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: The Pool of Pieces -->
+            <div class="flex-1 w-full bg-gray-100 p-6 rounded-2xl shadow-inner border border-gray-200 flex flex-col h-full overflow-hidden">
+                <h3 class="text-xl font-black mb-4 text-brand-navy border-b-2 border-gray-200 pb-2 uppercase tracking-wide shrink-0">Jigsaw Pieces</h3>
+                
+                <!-- Scrollable pool area -->
+                <div id="pool" class="flex-1 flex flex-wrap gap-4 justify-center items-center content-start overflow-y-auto custom-scroll pb-4">
+                    <!-- Draggable pieces will be injected here -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Data Configuration for exactly 6 pieces (2 rows, 3 columns)
+        // Formatting is handled via inline classes to ensure a perfect fit
+        const puzzleConfig = [
+            // Row 0
+            { id: 0, t: 0, r: 1, b: -1, l: 0, short: 'Gamified<br>Experiences', full: '<div class="font-bold text-[0.8rem] mb-1 leading-tight text-brand-navy">Gamified Experiences</div><div class="leading-tight text-[0.7rem] text-gray-700">Use puzzles & quizzes for low-stakes checks.</div>' },
+            { id: 1, t: 0, r: -1, b: 1, l: -1, short: 'Real-world<br>Practice', full: '<div class="font-bold text-[0.8rem] mb-1 leading-tight text-brand-navy">Real-world Practice</div><div class="leading-tight text-[0.7rem] text-gray-700">Give learners a safe space to simulate scenarios.</div>' },
+            { id: 2, t: 0, r: 0, b: -1, l: 1, short: 'Virtual<br>Coach', full: '<div class="font-bold text-[0.8rem] mb-1 leading-tight text-brand-navy">Virtual Coach</div><div class="leading-tight text-[0.7rem] text-gray-700">Create step-by-step guidance for new skills.</div>' },
+            // Row 1
+            { id: 3, t: 1, r: -1, b: 0, l: 0, short: 'Consider<br>Limitations', full: '<div class="font-bold text-[0.8rem] mb-1 leading-tight text-brand-navy">Limitations</div><div class="leading-tight text-[0.7rem] text-gray-700">Limitations of tools should be considered.</div>' },
+            { id: 4, t: -1, r: 1, b: 0, l: 1, short: 'Clear<br>Instructions', full: '<div class="font-bold text-[0.8rem] mb-1 leading-tight text-brand-navy">Clear Instructions</div><div class="leading-tight text-[0.7rem] text-gray-700">Provide step-by-step guidance beforehand.</div>' },
+            { id: 5, t: 1, r: 0, b: 0, l: -1, short: 'Psychological<br>Safety', full: '<div class="font-bold text-[0.8rem] mb-1 leading-tight text-brand-navy">Psychological Safety</div><div class="leading-tight text-[0.7rem] text-gray-700">Let learners know it is okay to make mistakes.</div>' }
+        ];
+
+        // Generator function for scaled SVG jigsaw paths with shallower cutouts
+        // The core square runs from 30 to 170. Knobs/Holes extend 20px out instead of 30px.
+        function getPuzzlePath(t, r, b, l) {
+            let path = 'M 30 30 ';
+            
+            // Top Edge
+            path += t === 0 ? 'L 170 30 ' : (t === 1 ? 'L 85 30 C 85 10, 115 10, 115 30 L 170 30 ' : 'L 85 30 C 85 50, 115 50, 115 30 L 170 30 ');
+            
+            // Right Edge
+            path += r === 0 ? 'L 170 170 ' : (r === 1 ? 'L 170 85 C 190 85, 190 115, 170 115 L 170 170 ' : 'L 170 85 C 150 85, 150 115, 170 115 L 170 170 ');
+            
+            // Bottom Edge
+            path += b === 0 ? 'L 30 170 ' : (b === 1 ? 'L 115 170 C 115 190, 85 190, 85 170 L 30 170 ' : 'L 115 170 C 115 150, 85 150, 85 170 L 30 170 ');
+            
+            // Left Edge
+            path += l === 0 ? 'L 30 30 Z' : (l === 1 ? 'L 30 115 C 10 115, 10 85, 30 85 L 30 30 Z' : 'L 30 115 C 50 115, 50 85, 30 85 L 30 30 Z');
+            
+            return path;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvasBoard = document.getElementById('canvas-board');
+            const pool = document.getElementById('pool');
+            let placedCount = 0;
+
+            // 1. Build the Canvas Board Slots
+            puzzleConfig.forEach((data, index) => {
+                const slot = document.createElement('div');
+                slot.className = 'board-slot';
+                slot.dataset.id = data.id;
+                
+                // Position in 2x3 grid (each visual cell advances by 140px)
+                const col = index % 3;
+                const row = Math.floor(index / 3);
+                slot.style.top = `${row * 140}px`;
+                slot.style.left = `${col * 140}px`;
+
+                // Empty slot with no visible outline
+                slot.innerHTML = '';
+                canvasBoard.appendChild(slot);
+            });
+
+            // 2. Build the Draggable Pieces
+            const shuffledPieces = [...puzzleConfig].sort(() => Math.random() - 0.5);
+            
+            shuffledPieces.forEach(data => {
+                const piece = document.createElement('div');
+                piece.className = 'draggable';
+                piece.dataset.id = data.id;
+
+                const pathData = getPuzzlePath(data.t, data.r, data.b, data.l);
+                
+                // Dynamic padding: pushes text away from edges that have holes (-1)
+                // 24px padding for holes, 4px padding for flat/knob edges
+                const pt = data.t === -1 ? 24 : 4;
+                const pr = data.r === -1 ? 24 : 4;
+                const pb = data.b === -1 ? 24 : 4;
+                const pl = data.l === -1 ? 24 : 4;
+                
+                piece.innerHTML = `
+                    <svg viewBox="-6 -6 212 212" class="absolute inset-0 w-full h-full pointer-events-none">
+                        <path d="${pathData}" fill="#ffffff" stroke="var(--brand-navy)" stroke-width="6" stroke-linejoin="round" />
+                    </svg>
+                    <div class="piece-text-container" style="padding: ${pt}px ${pr}px ${pb}px ${pl}px;">
+                        <span class="short-text">${data.short}</span>
+                        <div class="full-text">${data.full}</div>
+                    </div>
+                `;
+                pool.appendChild(piece);
+            });
+
+            // 3. Drag and Drop Logic
+            const draggables = document.querySelectorAll('.draggable');
+            const slots = document.querySelectorAll('.board-slot');
+            let draggedItem = null;
+            let ghost = null;
+            let startX, startY;
+
+            draggables.forEach(item => {
+                item.addEventListener('pointerdown', startDrag);
+            });
+
+            function startDrag(e) {
+                if (e.button !== 0 && e.type.includes('mouse')) return;
+                e.preventDefault();
+
+                draggedItem = e.currentTarget;
+                const rect = draggedItem.getBoundingClientRect();
+
+                // Create visual ghost for dragging
+                ghost = draggedItem.cloneNode(true);
+                ghost.style.position = 'fixed';
+                ghost.style.zIndex = '1000';
+                ghost.style.pointerEvents = 'none';
+                ghost.style.left = rect.left + 'px';
+                ghost.style.top = rect.top + 'px';
+                ghost.style.margin = '0';
+                
+                ghost.style.filter = 'drop-shadow(0 15px 25px rgba(31, 42, 82, 0.3))';
+                document.body.appendChild(ghost);
+
+                draggedItem.style.opacity = '0';
+
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+
+                document.addEventListener('pointermove', drag);
+                document.addEventListener('pointerup', endDrag);
+            }
+
+            function drag(e) {
+                if (!ghost) return;
+                ghost.style.left = (e.clientX - startX) + 'px';
+                ghost.style.top = (e.clientY - startY) + 'px';
+
+                const ghostRect = ghost.getBoundingClientRect();
+                const ghostCenterX = ghostRect.left + ghostRect.width / 2;
+                const ghostCenterY = ghostRect.top + ghostRect.height / 2;
+
+                slots.forEach(s => s.classList.remove('drag-over'));
+                
+                let minDistance = 50; 
+                let closestSlot = null;
+
+                slots.forEach(slot => {
+                    if (slot.classList.contains('locked')) return;
+                    
+                    const slotRect = slot.getBoundingClientRect();
+                    const slotCenterX = slotRect.left + slotRect.width / 2;
+                    const slotCenterY = slotRect.top + slotRect.height / 2;
+                    const dist = Math.hypot(ghostCenterX - slotCenterX, ghostCenterY - slotCenterY);
+                    
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestSlot = slot;
+                    }
+                });
+
+                if (closestSlot) closestSlot.classList.add('drag-over');
+            }
+
+            function endDrag(e) {
+                document.removeEventListener('pointermove', drag);
+                document.removeEventListener('pointerup', endDrag);
+
+                if (!ghost || !draggedItem) return;
+
+                const ghostRect = ghost.getBoundingClientRect();
+                const ghostCenterX = ghostRect.left + ghostRect.width / 2;
+                const ghostCenterY = ghostRect.top + ghostRect.height / 2;
+
+                let minDistance = 50;
+                let targetSlot = null;
+
+                slots.forEach(slot => {
+                    slot.classList.remove('drag-over');
+                    if (slot.classList.contains('locked')) return;
+                    
+                    const slotRect = slot.getBoundingClientRect();
+                    const slotCenterX = slotRect.left + slotRect.width / 2;
+                    const slotCenterY = slotRect.top + slotRect.height / 2;
+                    const dist = Math.hypot(ghostCenterX - slotCenterX, ghostCenterY - slotCenterY);
+                    
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        targetSlot = slot;
+                    }
+                });
+
+                if (targetSlot && targetSlot.dataset.id === draggedItem.dataset.id) {
+                    handleCorrectMatch(draggedItem, targetSlot);
+                    ghost.remove();
+                    ghost = null;
+                    draggedItem = null;
+                } else {
+                    handleIncorrectMatch(draggedItem, ghost, targetSlot);
+                }
+            }
+
+            function handleCorrectMatch(item, slot) {
+                slot.classList.add('locked');
+                slot.innerHTML = item.innerHTML;
+                
+                item.remove(); 
+                
+                placedCount++;
+                if (placedCount === 6) {
+                    canvasBoard.classList.add('puzzle-complete');
+                    canvasBoard.classList.remove('border-dashed', 'border-brand-cyan/40', 'bg-brand-light/30');
+                    canvasBoard.classList.add('border-solid', 'bg-white', 'border-brand-navy');
+                    triggerWin();
+                }
+            }
+
+            function handleIncorrectMatch(item, ghostEl, slot) {
+                const rect = item.getBoundingClientRect();
+                ghostEl.style.transition = 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                ghostEl.style.left = rect.left + 'px';
+                ghostEl.style.top = rect.top + 'px';
+
+                setTimeout(() => {
+                    item.style.opacity = '1';
+                    ghostEl.remove();
+                    ghost = null;
+                    draggedItem = null;
+                }, 300);
+            }
+
+            function triggerWin() {
+                // Wait exactly 3 seconds before showing the modal and confetti
+                setTimeout(() => {
+                    const canvasRect = canvasBoard.getBoundingClientRect();
+                    
+                    const originX = (canvasRect.left + canvasRect.width / 2) / window.innerWidth;
+                    const originY = (canvasRect.top + canvasRect.height / 2) / window.innerHeight;
+
+                    confetti({
+                        particleCount: 150,
+                        spread: 100,
+                        origin: { x: originX, y: originY },
+                        colors: ['#1f2a52', '#00bec7', '#d2f0f0'],
+                        disableForReducedMotion: true
+                    });
+
+                    const overlay = document.getElementById('success-overlay');
+                    const card = document.getElementById('success-card');
+                    
+                    overlay.classList.remove('opacity-0', 'pointer-events-none');
+                    card.classList.remove('scale-75');
+                    card.classList.add('scale-100');
+                    
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>
